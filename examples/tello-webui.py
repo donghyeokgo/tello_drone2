@@ -7,7 +7,10 @@ from djitellopy import Tello
 import time
 from datetime import datetime
 import numpy as np
+
 from openai import OpenAI
+import google.generativeai as genai
+
 from dotenv import load_dotenv
 import base64
 from gtts import gTTS
@@ -18,7 +21,25 @@ import tempfile
 load_dotenv()
 
 # OpenAI 클라이언트 초기화
-client = OpenAI(api_key=os.getenv('OPENAI_API_KEY'))
+# client = OpenAI(api_key=os.getenv('OPENAI_API_KEY'))
+# GOOGLE_API_KEY = os.getenv('GOOGLE_API_KEY')
+genai.configure(api_key=os.environ["GOOGLE_API_KEY"])
+
+# Create the model
+generation_config = {
+  "temperature": 1,
+  "top_p": 0.95,
+  "top_k": 40,
+  "max_output_tokens": 8192,
+  "response_mime_type": "text/plain",
+}
+
+model = genai.GenerativeModel(
+  model_name="gemini-2.0-flash-exp",
+  generation_config=generation_config,
+)
+
+chat_session = model.start_chat()
 
 app = Flask(__name__)
 
@@ -91,7 +112,7 @@ class TelloController:
                 frame = self.frame_reader.frame
                 if frame is not None:
                     frame = cv2.resize(frame, (640, 480))
-                    
+                    frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
                     if self.frame_queue.full():
                         try:
                             self.frame_queue.get_nowait()
@@ -158,34 +179,55 @@ class TelloController:
             raise
 
     def analyze_image(self, image_path: str) -> str:
-        """GPT Vision으로 이미지 분석"""
         try:
             with open(image_path, "rb") as image_file:
                 base64_image = base64.b64encode(image_file.read()).decode('utf-8')
                 
-            response = client.chat.completions.create(
-                model="gpt-4o-mini",
-                messages=[
+            response = chat_session.send_message(
+                f"이 이미지에서 보이는 것을 자세히 설명해주세요.",
+                [
                     {
-                        "role": "user",
-                        "content": [
-                            {"type": "text", "text": "이 이미지에서 보이는 것을 자세히 설명해주세요."},
-                            {
-                                "type": "image_url",
-                                "image_url": {
-                                    "url": f"data:image/jpeg;base64,{base64_image}"
-                                }
-                            }
-                        ]
+                        "type": "image_url",
+                        "image_url": {
+                            "url": f"data:image/jpeg;base64,{base64_image}"
+                        }
                     }
-                ],
-                max_tokens=500
+                ]
             )
             
-            return response.choices[0].message.content
+            return response.text
         except Exception as e:
             print(f"이미지 분석 오류: {str(e)}")
             return f"이미지 분석 중 오류가 발생했습니다: {str(e)}"
+
+    # def analyze_image(self, image_path: str) -> str:
+    #     """GPT Vision으로 이미지 분석"""
+    #     try:
+    #         with open(image_path, "rb") as image_file:
+    #             base64_image = base64.b64encode(image_file.read()).decode('utf-8')
+                
+    #         response = chat_session.send_message(
+    #             messages=[
+    #                 {
+    #                     "role": "user",
+    #                     "content": [
+    #                         {"type": "text", "text": "이 이미지에서 보이는 것을 자세히 설명해주세요."},
+    #                         {
+    #                             "type": "image_url",
+    #                             "image_url": {
+    #                                 "url": f"data:image/jpeg;base64,{base64_image}"
+    #                             }
+    #                         }
+    #                     ]
+    #                 }
+    #             ],
+    #             max_tokens=500
+    #         )
+            
+    #         return response.choices[0].message.content
+    #     except Exception as e:
+    #         print(f"이미지 분석 오류: {str(e)}")
+    #         return f"이미지 분석 중 오류가 발생했습니다: {str(e)}"
 
     def speak(self, text: str):
         """텍스트를 음성으로 변환하여 재생"""
