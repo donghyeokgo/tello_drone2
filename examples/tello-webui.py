@@ -199,6 +199,9 @@ class TelloController:
         except Exception as e:
             print(f"이미지 분석 오류: {str(e)}")
             return f"이미지 분석 중 오류가 발생했습니다: {str(e)}"
+        
+        
+
 
     # def analyze_image(self, image_path: str) -> str:
     #     """GPT Vision으로 이미지 분석"""
