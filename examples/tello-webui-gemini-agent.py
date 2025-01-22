@@ -343,58 +343,65 @@ class TelloController:
 
 # 드론 제어를 위한 도구 함수들
 class DroneAgent:
-    def __init__(self):
+    def __init__(self, controller):
+        self.controller = controller
         self.chat_session = model.start_chat(history=[])
         self.chat_session.send_message("""당신은 Tello 드론을 제어하는 전문가입니다.
-        주어진 자연어 명령을 이해하고, djitellopy 라이브러리를 사용하여 드론을 제어하는 명령을 생성해야 합니다.
+        주어진 자연어 명령을 정확히 'tello.command()' 형식의 명령어로만 변환해야 합니다.
         
-        다음과 같은 명령어를 이해하고 실행할 수 있습니다:
-        1. 이륙/착륙 명령
-        2. 상하좌우/전진/후진 이동 (거리 단위: cm)
-        3. 시계/반시계 방향 회전 (각도 단위: 도)
+        반드시 다음 형식으로만 응답하세요:
+        tello.takeoff()
+        또는
+        tello.land()
+        또는
+        tello.move_forward(300)
+        또는
+        tello.rotate_clockwise(90)
 
         예시:
-        - "이륙해줘" -> tello.takeoff()
-        - "착륙해줘" -> tello.land()
-        - "3미터 앞으로 가줘" -> tello.move_forward(300)
-        - "90도 시계방향으로 회전해줘" -> tello.rotate_clockwise(90)
-        
-        생성된 코드는 반드시 다음과 같은 형식으로 반환해야 합니다:
-        ```
-        tello.takeoff()
-        ```
-        또는
-        ```
-        tello.land()
-        ```
-        또는
-        ```
-        tello.move_forward(300)
-        ```
-        또는
-        ```
-        tello.rotate_clockwise(90)
-        ```
-        등등
+        입력: "이륙해줘"
+        출력: tello.takeoff()
+
+        입력: "착륙해줘"
+        출력: tello.land()
+
+        입력: "3미터 앞으로 가줘"
+        출력: tello.move_forward(300)
+
+        다른 설명이나 추가 텍스트 없이 오직 명령어만 반환하세요.
         """)
 
     
     def process_command(self, command: str) -> str:
         try:
+            # 명령어 생성 요청
             response = self.chat_session.send_message(command)
-            generated_code = response.text
+            generated_code = response.text.strip()
             
-            # 생성된 코드에서 tello 명령을 추출
-            commands = [line.strip() for line in generated_code.split('\n') if line.strip().startswith('tello.')]
+            # 불필요한 텍스트나 마크다운 제거
+            command_line = generated_code.replace('```python', '').replace('```', '').strip()
             
-            # 각 명령을 실행
-            for cmd in commands:
-                func_name = cmd.split('(')[0].split('.')[1]
-                args = eval(cmd.split('(')[1].split(')')[0])
-                getattr(controller.tello, func_name)(*args)
-                time.sleep(1)  # 각 명령 사이에 1초 대기
+            # tello. 으로 시작하는지 확인
+            if not command_line.startswith('tello.'):
+                return "유효한 드론 명령이 아닙니다."
             
-            return "명령이 성공적으로 실행되었습니다."
+            # 명령어와 인자 분리
+            func_name = command_line.split('(')[0].replace('tello.', '')
+            args_str = command_line.split('(')[1].rstrip(')')
+            
+            # 인자가 있는 경우 처리
+            if args_str:
+                args = [int(arg.strip()) for arg in args_str.split(',') if arg.strip()]
+            else:
+                args = []
+            
+            # 명령 실행
+            print(f"Executing command: {func_name} with args: {args}")
+            command_func = getattr(self.controller.tello, func_name)
+            command_func(*args)
+            
+            return f"명령이 실행되었습니다: {command_line}"
+            
         except Exception as e:
             return f"명령 처리 중 오류가 발생했습니다: {str(e)}"
 
@@ -733,7 +740,7 @@ def agent_control():
             agent_type = request.json.get('agent_type')
             
             if agent_type == "drone":
-                agent = DroneAgent()
+                agent = DroneAgent(controller)
                 result = agent.process_command(command)
                 return jsonify({"status": "success", "message": result})
             elif agent_type == "camera":
