@@ -346,30 +346,38 @@ class DroneAgent:
     def __init__(self, controller):
         self.controller = controller
         self.chat_session = model.start_chat(history=[])
-        self.chat_session.send_message("""당신은 Tello 드론을 제어하는 전문가입니다.
-        주어진 자연어 명령을 정확히 'tello.command()' 형식의 명령어로만 변환해야 합니다.
-        
-        반드시 다음 형식으로만 응답하세요:
-        tello.takeoff()
-        또는
-        tello.land()
-        또는
-        tello.move_forward(300)
-        또는
-        tello.rotate_clockwise(90)
+        self.chat_session.send_message("""
+                당신은 Tello 드론을 제어하는 전문가입니다.
+                주어진 자연어 명령을 이해하고, djitellopy 라이브러리를 사용하여 드론을 제어하는 파이썬 코드를 생성해야 합니다.
+                생성된 코드는 반드시 실행 가능한 형태여야 합니다.
+                다음과 같은 명령어를 이해하고 실행할 수 있습니다:
+                1. 이륙/착륙 명령
+                2. 상하좌우/전진/후진 이동 (거리 단위: cm)
+                3. 시계/반시계 방향 회전 (각도 단위: 도)
 
-        예시:
-        입력: "이륙해줘"
-        출력: tello.takeoff()
+                예시:
+                - "이륙해줘" -> `tello.takeoff()`
+                - "착륙해줘" -> `tello.land()`
+                - "3미터 앞으로 가줘" -> `tello.move_forward(300)`
+                - "90도 시계방향으로 회전해줘" -> `tello.rotate_clockwise(90)`
 
-        입력: "착륙해줘"
-        출력: tello.land()
-
-        입력: "3미터 앞으로 가줘"
-        출력: tello.move_forward(300)
-
-        다른 설명이나 추가 텍스트 없이 오직 명령어만 반환하세요.
-        """)
+                생성된 코드는 반드시 다음과 같은 형식으로 반환해야 합니다:
+                ```
+                tello.takeoff()
+                ```
+                또는
+                ```
+                tello.land()
+                ```
+                또는
+                ```
+                tello.move_forward(300)
+                ```
+                또는
+                ```
+                tello.rotate_clockwise(90)
+                ```
+                등등""")
 
     
     def process_command(self, command: str) -> str:
@@ -545,7 +553,7 @@ tool_analyze_view.name = "analyze_view"
 tool_analyze_view.description = "드론 카메라의 현재 시야를 분석합니다."
 tool_analyze_view.inputs = {}
 
-# 드론 제어 에이전트
+# 드론 제어 에이전트 - openai와 프롬프트 전달 형식이 달라 따로 --> Droneagent클래스 생성
 def create_drone_agent():
     system_prompt = """{{managed_agents_descriptions}}
 당신은 Tello 드론을 제어하는 전문가입니다.
@@ -731,7 +739,8 @@ def control_drone():
         return jsonify({"status": "error", "message": "드론이 연결되지 않았습니다."})
     except Exception as e:
         return jsonify({"status": "error", "message": str(e)})
-
+#
+# AI 에이전트에 자연어로 명령 전송
 @app.route('/agent_control', methods=['POST'])
 def agent_control():
     try:
@@ -755,8 +764,8 @@ def agent_control():
         return jsonify({"status": "error", "message": "드론이 연결되지 않았습니다."})
     except Exception as e:
         return jsonify({"status": "error", "message": str(e)})
-
-
+#
+# 음성 제어 버튼 클릭시 동작 설정
 @app.route('/start_recording', methods=['POST'])
 def start_recording():
     try:
@@ -788,7 +797,7 @@ def start_recording():
             print(f"인식된 명령: {command}")
             
             # 드론 에이전트로 명령 처리
-            agent = DroneAgent()
+            agent = DroneAgent(controller)
             result = agent.process_command(command)
             
             return jsonify({
